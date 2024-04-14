@@ -2,3 +2,4 @@
 *.pdf
 thermo*
 *.json
+slurm*
