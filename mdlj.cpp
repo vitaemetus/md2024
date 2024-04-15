@@ -39,6 +39,9 @@ struct SystemOptions {
     double density = 0.5;
     double box_size;
     double T0 = 1.0;
+    bool lang = false;
+    double Tl = T0;
+    double gamma = 5.0;
     unsigned seed = time(NULL);
     double cutoff_radius = 1.0e6;
     double energy_cut;
@@ -47,8 +50,9 @@ struct SystemOptions {
     unsigned steps_number = 100;
     unsigned print_thermo_frequency = 100;
     unsigned print_out_frequency = 100;
-    unsigned rescale_const = steps_number + 1;
-    unsigned duration = 0;
+    bool ber = false;
+    double rescale_const = 1.0;
+    unsigned duration = steps_number;
     bool write_output_in_one_file = false;
     string init_config_file = "";
     bool use_energy_correction = false;
@@ -64,27 +68,31 @@ void PrintUsageInfo() {
     cout << "mdlj usage:" << endl;
     cout << "mdlj [options]" << endl << endl;
     cout << "Options:" << endl;
-    cout << "\t -N [integer]        Number of particles" << endl;
-    cout << "\t -rho [real]         Number density" << endl;
-    cout << "\t -dt [real]          Time step" << endl;
-    cout << "\t -rc [real]          Cutoff radius" << endl;
-    cout << "\t -ns [real]          Number of integration steps" << endl;
-    cout << "\t -T0 [real]          Initial temperature" << endl;
-    cout << "\t -thermof [integer]  Thermo information print frequency" << endl;
-    cout << "\t -outf [integer]     Print positions to XYZ file frequency" << endl;
-    cout << "\t -onefile            Write config to single output file (multiple files otherwise)"
+    cout << "\t -N [integer]         Number of particles" << endl;
+    cout << "\t -rho [real]          Number density" << endl;
+    cout << "\t -dt [real]           Time step" << endl;
+    cout << "\t -rc [real]           Cutoff radius" << endl;
+    cout << "\t -ns [real]           Number of integration steps" << endl;
+    cout << "\t -T0 [real]           Initial temperature" << endl;
+    cout << "\t -thermof [integer]   Thermo information print frequency" << endl;
+    cout << "\t -lang                Use Langevin thermostat" << endl;
+    cout << "\t -Tl [real]           Thermostat temperature" << endl;
+    cout << "\t -gamma [real]        Damping coefficient for the Langevin thermostat" << endl;
+    cout << "\t -outf [integer]      Print positions to XYZ file frequency" << endl;
+    cout << "\t -onefile             Write config to single output file (multiple files otherwise)"
         << endl;
-    cout << "\t -icf [string]       Initial configuration file" << endl;
-    cout << "\t -ecorr              Use energy correction" << endl;
-    cout << "\t -seed [integer]     Random number generator seed" << endl;
-    cout << "\t -uf                 Print unfolded coordinates in output files" << endl;
-    cout << "\t -novelo             Not print and not read velocity from files" << endl;
-    cout << "\t -h                  Print this info" << endl;
-    cout << "\t -outdir             A directory for animations" << endl;
-    cout << "\t -rescale [integer]  Velocity rescale constant" << endl;
-    cout << "\t -duration [integer] Duration of the thermostat working" << endl;
-    cout << "\t -msd                Output MSD" << endl;
-    cout << "\t -msd_start          Time to start computing msd" << endl;
+    cout << "\t -icf [string]        Initial configuration file" << endl;
+    cout << "\t -ecorr               Use energy correction" << endl;
+    cout << "\t -seed [integer]      Random number generator seed" << endl;
+    cout << "\t -uf                  Print unfolded coordinates in output files" << endl;
+    cout << "\t -novelo              Not print and not read velocity from files" << endl;
+    cout << "\t -h                   Print this info" << endl;
+    cout << "\t -outdir              A directory for animations" << endl;
+    cout << "\t -ber                 Use Berendsen thermostat" << endl;
+    cout << "\t -rescale [real]      Berendsen velocity rescale constant" << endl;
+    cout << "\t -duration [integer]  Duration of the thermostat working" << endl;
+    cout << "\t -msd                 Output MSD" << endl;
+    cout << "\t -msd_start [integer] Step to start computing msd" << endl;
 }
 
 SystemOptions ParseCommandLineArguments(int argc, char** argv) {
@@ -97,6 +105,9 @@ SystemOptions ParseCommandLineArguments(int argc, char** argv) {
         else if (arg_str == "-rc") options.cutoff_radius = atof(argv[++arg_index]);
         else if (arg_str == "-ns") options.steps_number = atoi(argv[++arg_index]);
         else if (arg_str == "-T0") options.T0 = atof(argv[++arg_index]);
+        else if (arg_str == "-lang") options.lang = true;
+        else if (arg_str == "-Tl") options.Tl = atof(argv[++arg_index]);
+        else if (arg_str == "-gamma") options.gamma = atof(argv[++arg_index]);
         else if (arg_str == "-thermof") options.print_thermo_frequency = atoi(argv[++arg_index]);
         else if (arg_str == "-outf") options.print_out_frequency = atoi(argv[++arg_index]);
         else if (arg_str == "-onefile") options.write_output_in_one_file = true;
@@ -106,6 +117,7 @@ SystemOptions ParseCommandLineArguments(int argc, char** argv) {
         else if (arg_str == "-uf") options.print_unfolded_coordinates = true;
         else if (arg_str == "-novelo") options.read_and_print_with_velocity = false;
         else if (arg_str == "-outdir") options.outdirname = argv[++arg_index];
+        else if (arg_str == "-ber") options.ber = true;
         else if (arg_str == "-rescale") options.rescale_const = atof(argv[++arg_index]);
         else if (arg_str == "-duration") options.duration = atoi(argv[++arg_index]);
         else if (arg_str == "-msd") options.msd_on = true;
@@ -357,7 +369,7 @@ void ApplyPeriodicBoundaryConditions(vector<Particle>& particles, const SystemOp
 // Berendsen thermostat
 void Berendsen(vector <Particle>& particles, double T, const SystemOptions& options){
     // Calculate the rescale factor
-    double lambda = sqrt(1 + (options.dt / options.rescale_const) * (options.T0 / T - 1));
+    double lambda = sqrt(1 + (options.dt / options.rescale_const) * (options.Tl / T - 1));
     
     // Rescale the velocities
     for (auto& particle : particles) {
@@ -396,6 +408,8 @@ int main(int argc, char* argv[]) {
         options.energy_correction = 8 * M_PI * options.density * (rr3 * rr3 * rr3 / 9.0 - rr3 / 3.0);
     }
 
+    const double boltzmann = 1.0;
+    normal_distribution<double> distribution(0, 1);
     mt19937 rng(options.seed);
 
     // Output some initial information
@@ -468,7 +482,6 @@ int main(int argc, char* argv[]) {
 
         // Compute MSD
         if (options.msd_on && (step>=options.msd_start)) options.msd = 0.0;
-
         for (auto& particle : particles) {
 
             particle.x += particle.vx * options.dt + 0.5 * options.dt * options.dt * particle.ax;
@@ -497,6 +510,20 @@ int main(int argc, char* argv[]) {
         options.msd /= options.particles_number;
 
         ApplyPeriodicBoundaryConditions(particles, options);
+        output = ComputeForcesAndPotentialEnergy(particles, options);
+
+        // Here we add the Langevin terms to the equations of motion
+        if (options.lang && step<=options.duration){
+            double randomx, randomy, randomz;
+            for (auto& particle : particles) {
+                randomx = distribution(rng);
+                randomy = distribution(rng);
+                randomz = distribution(rng);
+                particle.ax -= options.gamma*particle.vx - sqrt(2.0*options.gamma*boltzmann*options.Tl/options.dt)*randomx;
+                particle.ay -= options.gamma*particle.vy - sqrt(2.0*options.gamma*boltzmann*options.Tl/options.dt)*randomy;
+                particle.az -= options.gamma*particle.vz - sqrt(2.0*options.gamma*boltzmann*options.Tl/options.dt)*randomz;
+            }
+        }
 
         // Kinetic energy recalculation after the first half-step
         double kinetic_energy = 0.0;
@@ -506,11 +533,9 @@ int main(int argc, char* argv[]) {
         }
 
         // Berendsen temperature coupling
-        if (step * options.dt <= options.duration){
+        if (options.ber && step<=options.duration){
             Berendsen(particles, kinetic_energy * 2 / 3 / options.particles_number, options);
         }
-
-        output = ComputeForcesAndPotentialEnergy(particles, options);
 
         // Second integration half-step
         kinetic_energy = 0.0;

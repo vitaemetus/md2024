@@ -3,3 +3,5 @@
 thermo*
 *.json
 slurm*
+mdlj_langevin.cpp
+mdlj_lagevin
