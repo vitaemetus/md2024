@@ -5,3 +5,4 @@ thermo*
 slurm*
 mdlj_langevin.cpp
 mdlj_lagevin
+mdlj

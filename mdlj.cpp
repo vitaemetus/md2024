@@ -51,7 +51,7 @@ struct SystemOptions {
     unsigned print_thermo_frequency = 100;
     unsigned print_out_frequency = 100;
     bool ber = false;
-    double rescale_const = 1.0;
+    double tau = 1.0;
     unsigned duration = steps_number;
     bool write_output_in_one_file = false;
     string init_config_file = "";
@@ -89,7 +89,7 @@ void PrintUsageInfo() {
     cout << "\t -h                   Print this info" << endl;
     cout << "\t -outdir              A directory for animations" << endl;
     cout << "\t -ber                 Use Berendsen thermostat" << endl;
-    cout << "\t -rescale [real]      Berendsen velocity rescale constant" << endl;
+    cout << "\t -tau [real]          Berendsen velocity rescale constant" << endl;
     cout << "\t -duration [integer]  Duration of the thermostat working" << endl;
     cout << "\t -msd                 Output MSD" << endl;
     cout << "\t -msd_start [integer] Step to start computing msd" << endl;
@@ -118,7 +118,7 @@ SystemOptions ParseCommandLineArguments(int argc, char** argv) {
         else if (arg_str == "-novelo") options.read_and_print_with_velocity = false;
         else if (arg_str == "-outdir") options.outdirname = argv[++arg_index];
         else if (arg_str == "-ber") options.ber = true;
-        else if (arg_str == "-rescale") options.rescale_const = atof(argv[++arg_index]);
+        else if (arg_str == "-rescale") options.tau = atof(argv[++arg_index]);
         else if (arg_str == "-duration") options.duration = atoi(argv[++arg_index]);
         else if (arg_str == "-msd") options.msd_on = true;
         else if (arg_str == "-msd_start") options.msd_start = atoi(argv[++arg_index]);
@@ -369,7 +369,7 @@ void ApplyPeriodicBoundaryConditions(vector<Particle>& particles, const SystemOp
 // Berendsen thermostat
 void Berendsen(vector <Particle>& particles, double T, const SystemOptions& options){
     // Calculate the rescale factor
-    double lambda = sqrt(1 + (options.dt / options.rescale_const) * (options.Tl / T - 1));
+    double lambda = sqrt(1 + (options.dt / options.tau) * (options.Tl / T - 1));
     
     // Rescale the velocities
     for (auto& particle : particles) {
